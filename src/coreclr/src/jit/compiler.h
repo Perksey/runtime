@@ -2684,6 +2684,7 @@ public:
     // Other GenTree functions
 
     GenTree* gtClone(GenTree* tree, bool complexOK = false);
+    GenTree* gtCloneOrInsertCommaFormTemp(GenTree** ppTree, CORINFO_CLASS_HANDLE structType = nullptr);
 
     // If `tree` is a lclVar with lclNum `varNum`, return an IntCns with value `varVal`; otherwise,
     // create a copy of `tree`, adding specified flags, replacing uses of lclVar `deepVarNum` with
@@ -8157,7 +8158,8 @@ private:
     }
 
     // Returns the codegen type for a given SIMD size.
-    var_types getSIMDTypeForSize(unsigned size)
+public:
+    static var_types getSIMDTypeForSize(unsigned size)
     {
         var_types simdType = TYP_UNDEF;
         if (size == 8)
@@ -8183,6 +8185,7 @@ private:
         return simdType;
     }
 
+private:
     unsigned getSIMDInitTempVarNum()
     {
         if (lvaSIMDInitTempVarNum == BAD_VAR_NUM)

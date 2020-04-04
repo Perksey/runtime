@@ -2452,6 +2452,471 @@ void Compiler::impMarkContiguousSIMDFieldAssignments(Statement* stmt)
     }
 }
 
+#ifdef TARGET_XARCH
+static NamedIntrinsic lookupHWIntrinsicId(SIMDIntrinsicID simdIntrinsicId, var_types simdType, var_types baseType)
+{
+    NamedIntrinsic hwIntrinsicId = NI_Illegal;
+
+    switch (simdIntrinsicId)
+    {
+        case SIMDIntrinsicAdd:
+        {
+            switch (baseType)
+            {
+                case TYP_BYTE:
+                case TYP_UBYTE:
+                case TYP_SHORT:
+                case TYP_USHORT:
+                case TYP_INT:
+                case TYP_UINT:
+                case TYP_LONG:
+                case TYP_ULONG:
+                {
+                    hwIntrinsicId = (simdType == TYP_SIMD32) ? NI_AVX2_Add : NI_SSE2_Add;
+                    break;
+                }
+
+                case TYP_FLOAT:
+                {
+                    hwIntrinsicId = (simdType == TYP_SIMD32) ? NI_AVX_Add : NI_SSE_Add;
+                    break;
+                }
+
+                case TYP_DOUBLE:
+                {
+                    hwIntrinsicId = (simdType == TYP_SIMD32) ? NI_AVX_Add : NI_SSE2_Add;
+                    break;
+                }
+            }
+            break;
+        }
+
+        case SIMDIntrinsicSub:
+        {
+            switch (baseType)
+            {
+                case TYP_BYTE:
+                case TYP_UBYTE:
+                case TYP_SHORT:
+                case TYP_USHORT:
+                case TYP_INT:
+                case TYP_UINT:
+                case TYP_LONG:
+                case TYP_ULONG:
+                {
+                    hwIntrinsicId = (simdType == TYP_SIMD32) ? NI_AVX2_Subtract : NI_SSE2_Subtract;
+                    break;
+                }
+
+                case TYP_FLOAT:
+                {
+                    hwIntrinsicId = (simdType == TYP_SIMD32) ? NI_AVX_Subtract : NI_SSE_Subtract;
+                    break;
+                }
+
+                case TYP_DOUBLE:
+                {
+                    hwIntrinsicId = (simdType == TYP_SIMD32) ? NI_AVX_Subtract : NI_SSE2_Subtract;
+                    break;
+                }
+            }
+            break;
+        }
+
+        case SIMDIntrinsicMul:
+        {
+            switch (baseType)
+            {
+                case TYP_BYTE:
+                case TYP_UBYTE:
+                case TYP_LONG:
+                case TYP_ULONG:
+                {
+                    assert(!"Unsupported base type for SIMDIntrinsicMul");
+                    break;
+                }
+
+                case TYP_SHORT:
+                case TYP_USHORT:
+                {
+                    hwIntrinsicId = (simdType == TYP_SIMD32) ? NI_AVX2_MultiplyLow : NI_SSE2_MultiplyLow;
+                    break;
+                }
+
+                case TYP_INT:
+                case TYP_UINT:
+                {
+                    hwIntrinsicId = (simdType == TYP_SIMD32) ? NI_AVX2_MultiplyLow : NI_SSE41_MultiplyLow;
+                    break;
+                }
+
+                case TYP_FLOAT:
+                {
+                    hwIntrinsicId = (simdType == TYP_SIMD32) ? NI_AVX_Multiply : NI_SSE_Multiply;
+                    break;
+                }
+
+                case TYP_DOUBLE:
+                {
+                    hwIntrinsicId = (simdType == TYP_SIMD32) ? NI_AVX_Multiply : NI_SSE2_Multiply;
+                    break;
+                }
+            }
+            break;
+        }
+
+        case SIMDIntrinsicDiv:
+        {
+            switch (baseType)
+            {
+                case TYP_BYTE:
+                case TYP_UBYTE:
+                case TYP_LONG:
+                case TYP_ULONG:
+                case TYP_SHORT:
+                case TYP_USHORT:
+                case TYP_INT:
+                case TYP_UINT:
+                {
+                    assert(!"Unsupported base type for SIMDIntrinsicDiv");
+                    break;
+                }
+
+                case TYP_FLOAT:
+                {
+                    hwIntrinsicId = (simdType == TYP_SIMD32) ? NI_AVX_Divide : NI_SSE_Divide;
+                    break;
+                }
+
+                case TYP_DOUBLE:
+                {
+                    hwIntrinsicId = (simdType == TYP_SIMD32) ? NI_AVX_Divide : NI_SSE2_Divide;
+                    break;
+                }
+            }
+            break;
+        }
+
+        case SIMDIntrinsicEqual:
+        {
+            switch (baseType)
+            {
+                case TYP_BYTE:
+                case TYP_UBYTE:
+                case TYP_SHORT:
+                case TYP_USHORT:
+                case TYP_INT:
+                case TYP_UINT:
+                {
+                    hwIntrinsicId = (simdType == TYP_SIMD32) ? NI_AVX2_CompareEqual : NI_SSE2_CompareEqual;
+                    break;
+                }
+
+                case TYP_LONG:
+                case TYP_ULONG:
+                {
+                    hwIntrinsicId = (simdType == TYP_SIMD32) ? NI_AVX2_CompareEqual : NI_SSE41_CompareEqual;
+                    break;
+                }
+
+                case TYP_FLOAT:
+                {
+                    hwIntrinsicId = (simdType == TYP_SIMD32) ? NI_AVX_Compare : NI_SSE_CompareEqual;
+                    break;
+                }
+
+                case TYP_DOUBLE:
+                {
+                    hwIntrinsicId = (simdType == TYP_SIMD32) ? NI_AVX_Compare: NI_SSE2_CompareEqual;
+                    break;
+                }
+            }
+            break;
+        }
+
+        case SIMDIntrinsicLessThan:
+        {
+            switch (baseType)
+            {
+                case TYP_BYTE:
+                case TYP_UBYTE:
+                case TYP_SHORT:
+                case TYP_USHORT:
+                case TYP_INT:
+                case TYP_UINT:
+                case TYP_LONG:
+                case TYP_ULONG:
+                {
+                    assert(!"Unsupported base type for SIMDIntrinsicLessThan");
+                    break;
+                }
+
+                case TYP_FLOAT:
+                {
+                    hwIntrinsicId = (simdType == TYP_SIMD32) ? NI_AVX_Compare : NI_SSE_CompareLessThan;
+                    break;
+                }
+
+                case TYP_DOUBLE:
+                {
+                    hwIntrinsicId = (simdType == TYP_SIMD32) ? NI_AVX_Compare : NI_SSE2_CompareLessThan;
+                    break;
+                }
+            }
+            break;
+        }
+
+        case SIMDIntrinsicLessThanOrEqual:
+        {
+            switch (baseType)
+            {
+                case TYP_BYTE:
+                case TYP_UBYTE:
+                case TYP_SHORT:
+                case TYP_USHORT:
+                case TYP_INT:
+                case TYP_UINT:
+                case TYP_LONG:
+                case TYP_ULONG:
+                {
+                    assert(!"Unsupported base type for SIMDIntrinsicLessThanOrEqual");
+                    break;
+                }
+
+                case TYP_FLOAT:
+                {
+                    hwIntrinsicId = (simdType == TYP_SIMD32) ? NI_AVX_Compare : NI_SSE_CompareLessThanOrEqual;
+                    break;
+                }
+
+                case TYP_DOUBLE:
+                {
+                    hwIntrinsicId = (simdType == TYP_SIMD32) ? NI_AVX_Compare : NI_SSE2_CompareLessThanOrEqual;
+                    break;
+                }
+            }
+            break;
+        }
+
+        case SIMDIntrinsicGreaterThan:
+        {
+            switch (baseType)
+            {
+                case TYP_UBYTE:
+                case TYP_USHORT:
+                case TYP_UINT:
+                case TYP_ULONG:
+                {
+                    assert(!"Unsupported base type for SIMDIntrinsicGreaterThan");
+                    break;
+                }
+
+                case TYP_BYTE:
+                case TYP_SHORT:
+                case TYP_INT:
+                {
+                    hwIntrinsicId = (simdType == TYP_SIMD32) ? NI_AVX2_CompareGreaterThan : NI_SSE2_CompareGreaterThan;
+                    break;
+                }
+
+                case TYP_LONG:
+                {
+                    hwIntrinsicId = (simdType == TYP_SIMD32) ? NI_AVX2_CompareGreaterThan : NI_SSE42_CompareGreaterThan;
+                    break;
+                }
+
+                case TYP_FLOAT:
+                {
+                    hwIntrinsicId = (simdType == TYP_SIMD32) ? NI_AVX_Compare : NI_SSE_CompareGreaterThan;
+                    break;
+                }
+
+                case TYP_DOUBLE:
+                {
+                    hwIntrinsicId = (simdType == TYP_SIMD32) ? NI_AVX_Compare : NI_SSE2_CompareGreaterThan;
+                    break;
+                }
+            }
+            break;
+        }
+
+        case SIMDIntrinsicGreaterThanOrEqual:
+        {
+            switch (baseType)
+            {
+                case TYP_BYTE:
+                case TYP_UBYTE:
+                case TYP_SHORT:
+                case TYP_USHORT:
+                case TYP_INT:
+                case TYP_UINT:
+                case TYP_LONG:
+                case TYP_ULONG:
+                {
+                    assert(!"Unsupported base type for SIMDIntrinsicGreaterThanOrEqual");
+                    break;
+                }
+
+                case TYP_FLOAT:
+                {
+                    hwIntrinsicId = (simdType == TYP_SIMD32) ? NI_AVX_Compare : NI_SSE_CompareGreaterThanOrEqual;
+                    break;
+                }
+
+                case TYP_DOUBLE:
+                {
+                    hwIntrinsicId = (simdType == TYP_SIMD32) ? NI_AVX_Compare : NI_SSE2_CompareGreaterThanOrEqual;
+                    break;
+                }
+            }
+            break;
+        }
+
+        case SIMDIntrinsicBitwiseAnd:
+        {
+            switch (baseType)
+            {
+                case TYP_BYTE:
+                case TYP_UBYTE:
+                case TYP_SHORT:
+                case TYP_USHORT:
+                case TYP_INT:
+                case TYP_UINT:
+                case TYP_LONG:
+                case TYP_ULONG:
+                {
+                    hwIntrinsicId = (simdType == TYP_SIMD32) ? NI_AVX2_And : NI_SSE2_And;
+                    break;
+                }
+
+                case TYP_FLOAT:
+                {
+                    hwIntrinsicId = (simdType == TYP_SIMD32) ? NI_AVX_And : NI_SSE_And;
+                    break;
+                }
+
+                case TYP_DOUBLE:
+                {
+                    hwIntrinsicId = (simdType == TYP_SIMD32) ? NI_AVX_And : NI_SSE2_And;
+                    break;
+                }
+            }
+            break;
+        }
+
+        case SIMDIntrinsicBitwiseAndNot:
+        {
+            switch (baseType)
+            {
+                case TYP_BYTE:
+                case TYP_UBYTE:
+                case TYP_SHORT:
+                case TYP_USHORT:
+                case TYP_INT:
+                case TYP_UINT:
+                case TYP_LONG:
+                case TYP_ULONG:
+                {
+                    hwIntrinsicId = (simdType == TYP_SIMD32) ? NI_AVX2_AndNot : NI_SSE2_AndNot;
+                    break;
+                }
+
+                case TYP_FLOAT:
+                {
+                    hwIntrinsicId = (simdType == TYP_SIMD32) ? NI_AVX_AndNot : NI_SSE_AndNot;
+                    break;
+                }
+
+                case TYP_DOUBLE:
+                {
+                    hwIntrinsicId = (simdType == TYP_SIMD32) ? NI_AVX_AndNot : NI_SSE2_AndNot;
+                    break;
+                }
+            }
+            break;
+        }
+
+        case SIMDIntrinsicBitwiseOr:
+        {
+            switch (baseType)
+            {
+                case TYP_BYTE:
+                case TYP_UBYTE:
+                case TYP_SHORT:
+                case TYP_USHORT:
+                case TYP_INT:
+                case TYP_UINT:
+                case TYP_LONG:
+                case TYP_ULONG:
+                {
+                    hwIntrinsicId = (simdType == TYP_SIMD32) ? NI_AVX2_Or : NI_SSE2_Or;
+                    break;
+                }
+
+                case TYP_FLOAT:
+                {
+                    hwIntrinsicId = (simdType == TYP_SIMD32) ? NI_AVX_Or : NI_SSE_Or;
+                    break;
+                }
+
+                case TYP_DOUBLE:
+                {
+                    hwIntrinsicId = (simdType == TYP_SIMD32) ? NI_AVX_Or : NI_SSE2_Or;
+                    break;
+                }
+            }
+            break;
+        }
+
+        case SIMDIntrinsicBitwiseXor:
+        {
+            switch (baseType)
+            {
+                case TYP_BYTE:
+                case TYP_UBYTE:
+                case TYP_SHORT:
+                case TYP_USHORT:
+                case TYP_INT:
+                case TYP_UINT:
+                case TYP_LONG:
+                case TYP_ULONG:
+                {
+                    hwIntrinsicId = (simdType == TYP_SIMD32) ? NI_AVX2_Xor : NI_SSE2_Xor;
+                    break;
+                }
+
+                case TYP_FLOAT:
+                {
+                    hwIntrinsicId = (simdType == TYP_SIMD32) ? NI_AVX_Xor : NI_SSE_Xor;
+                    break;
+                }
+
+                case TYP_DOUBLE:
+                {
+                    hwIntrinsicId = (simdType == TYP_SIMD32) ? NI_AVX_Xor : NI_SSE2_Xor;
+                    break;
+                }
+            }
+            break;
+        }
+    }
+
+    return hwIntrinsicId;
+}
+
+GenTree* Compiler::gtCloneOrInsertCommaFormTemp(GenTree** ppTree, CORINFO_CLASS_HANDLE structType)
+{
+    if (((*ppTree)->gtFlags & GTF_SIDE_EFFECT) != 0)
+    {
+        return fgInsertCommaFormTemp(ppTree, structType);
+    }
+    else
+    {
+        return gtCloneExpr(*ppTree);
+    }
+}
+#endif
+
 //------------------------------------------------------------------------
 // impSIMDIntrinsic: Check method to see if it is a SIMD method
 //
@@ -2946,11 +3411,148 @@ GenTree* Compiler::impSIMDIntrinsic(OPCODE                opcode,
             op2 = impSIMDPopStack(simdType);
             op1 = impSIMDPopStack(simdType, instMethod);
 
-            SIMDIntrinsicID intrinsicID = impSIMDRelOp(simdIntrinsicID, clsHnd, size, &baseType, &op1, &op2);
-            simdTree                    = gtNewSIMDNode(genActualType(callType), op1, op2, intrinsicID, baseType, size);
-            retVal                      = simdTree;
+#if defined(TARGET_XARCH)
+            GenTree* dupOp1 = nullptr;
+            GenTree* dupOp2 = nullptr;
+
+            if (varTypeIsIntegral(baseType))
+            {
+                if ((simdIntrinsicID == SIMDIntrinsicLessThan) || (simdIntrinsicID == SIMDIntrinsicLessThanOrEqual))
+                {
+                    GenTree* tmp    = op2;
+                    op2             = op1;
+                    op1             = tmp;
+                }
+
+                if ((simdIntrinsicID != SIMDIntrinsicEqual) && varTypeIsUnsigned(baseType))
+                {
+                    __int64 constVal = 0;
+
+                    switch (baseType)
+                    {
+                        case TYP_UBYTE:
+                        {
+                            constVal = 0x80808080;
+                            baseType = TYP_BYTE;
+                            break;
+                        }
+
+                        case TYP_USHORT:
+                        {
+                            constVal = 0x80008000;
+                            baseType = TYP_SHORT;
+                            break;
+                        }
+
+                        case TYP_UINT:
+                        {
+                            constVal = 0x80000000;
+                            baseType = TYP_INT;
+                            break;
+                        }
+
+                        case TYP_ULONG:
+                        {
+                            constVal = 0x8000000000000000LL;
+                            baseType = TYP_LONG;
+                            break;
+                        }
+                    }
+
+                    GenTree* iconNode = nullptr;
+
+                    if (baseType == TYP_LONG)
+                    {
+                        iconNode = gtNewLconNode(constVal);
+                    }
+                    else
+                    {
+                        iconNode = gtNewIconNode((ssize_t)constVal, TYP_INT);
+                    }
+
+                    GenTree* constVector = gtNewSIMDNode(simdType, iconNode, nullptr, SIMDIntrinsicInit, iconNode->gtType, size);
+                    GenTree* dupConstVector = gtCloneOrInsertCommaFormTemp(&constVector, clsHnd);
+
+                    op1 = gtNewSIMDNode(simdType, op1, constVector, SIMDIntrinsicSub, baseType, size);
+                    op2 = gtNewSIMDNode(simdType, op2, dupConstVector, SIMDIntrinsicSub, baseType, size);
+                }
+
+                if ((simdIntrinsicID == SIMDIntrinsicLessThanOrEqual) || (simdIntrinsicID == SIMDIntrinsicGreaterThanOrEqual))
+                {
+                    dupOp1 = gtCloneOrInsertCommaFormTemp(&op1, clsHnd);
+                    dupOp2 = gtCloneOrInsertCommaFormTemp(&op2, clsHnd);
+                }
+
+                if (simdIntrinsicID != SIMDIntrinsicEqual)
+                {
+                    simdIntrinsicID = SIMDIntrinsicGreaterThan;
+                }
+            }
+
+            if (varTypeIsFloating(baseType) && (simdType == TYP_SIMD32))
+            {
+                int8_t cmpOp = -1;
+
+                switch (simdIntrinsicID)
+                {
+                    case SIMDIntrinsicEqual:
+                    {
+                        cmpOp = 0;
+                        break;
+                    }
+
+                    case SIMDIntrinsicLessThan:
+                    {
+                        cmpOp = 1;
+                        break;
+                    }
+
+                    case SIMDIntrinsicLessThanOrEqual:
+                    {
+                        cmpOp = 2;
+                        break;
+                    }
+
+                    case SIMDIntrinsicGreaterThan:
+                    {
+                        cmpOp = 14;
+                        break;
+                    }
+
+                    case SIMDIntrinsicGreaterThanOrEqual:
+                    {
+                        cmpOp = 13;
+                        break;
+                    }
+                }
+
+                NamedIntrinsic intrinsicId = lookupHWIntrinsicId(simdIntrinsicID, simdType, baseType);
+                simdTree = gtNewSimdHWIntrinsicNode(simdType, op1, op2, gtNewIconNode(cmpOp, TYP_INT), intrinsicId, baseType, size);
+            }
+            else
+            {
+                NamedIntrinsic intrinsicId = lookupHWIntrinsicId(simdIntrinsicID, simdType, baseType);
+                simdTree = gtNewSimdHWIntrinsicNode(simdType, op1, op2, intrinsicId, baseType, size);
+
+                if (dupOp1 != nullptr)
+                {
+                    op1 = simdTree;
+
+                    intrinsicId = lookupHWIntrinsicId(SIMDIntrinsicEqual, simdType, baseType);
+                    op2         = gtNewSimdHWIntrinsicNode(simdType, dupOp1, dupOp2, intrinsicId, baseType, size);
+
+                    intrinsicId = lookupHWIntrinsicId(SIMDIntrinsicBitwiseOr, simdType, baseType);
+                    simdTree    = gtNewSimdHWIntrinsicNode(simdType, op1, op2, intrinsicId, baseType, size);
+                }
+            }
+#else
+            SIMDIntrinsicID intrinsicId = impSIMDRelOp(simdIntrinsicID, clsHnd, size, &baseType, &op1, &op2);
+            simdTree                    = gtNewSIMDNode(genActualType(callType), op1, op2, intrinsicId, baseType, size);
+#endif // TARGET_XARCH
+
+            retVal = simdTree;
+            break;
         }
-        break;
 
         case SIMDIntrinsicAdd:
         case SIMDIntrinsicSub:
@@ -2961,69 +3563,26 @@ GenTree* Compiler::impSIMDIntrinsic(OPCODE                opcode,
         case SIMDIntrinsicBitwiseOr:
         case SIMDIntrinsicBitwiseXor:
         {
-#if defined(DEBUG)
-            // check for the cases where we don't support intrinsics.
-            // This check should be done before we make modifications to type stack.
-            // Note that this is more of a double safety check for robustness since
-            // we expect getSIMDIntrinsicInfo() to have filtered out intrinsics on
-            // unsupported base types. If getSIMdIntrinsicInfo() doesn't filter due
-            // to some bug, assert in chk/dbg will fire.
-            if (!varTypeIsFloating(baseType))
-            {
-                if (simdIntrinsicID == SIMDIntrinsicMul)
-                {
-#if defined(TARGET_XARCH)
-                    if ((baseType != TYP_INT) && (baseType != TYP_SHORT))
-                    {
-                        // TODO-CQ: implement mul on these integer vectors.
-                        // Note that SSE2 has no direct support for these vectors.
-                        assert(!"Mul not supported on long/ulong/uint/small int vectors\n");
-                        return nullptr;
-                    }
-#endif // TARGET_XARCH
-#if defined(TARGET_ARM64)
-                    if ((baseType == TYP_ULONG) && (baseType == TYP_LONG))
-                    {
-                        // TODO-CQ: implement mul on these integer vectors.
-                        // Note that ARM64 has no direct support for these vectors.
-                        assert(!"Mul not supported on long/ulong vectors\n");
-                        return nullptr;
-                    }
-#endif // TARGET_ARM64
-                }
-#if defined(TARGET_XARCH) || defined(TARGET_ARM64)
-                // common to all integer type vectors
-                if (simdIntrinsicID == SIMDIntrinsicDiv)
-                {
-                    // SSE2 doesn't support div on non-floating point vectors.
-                    assert(!"Div not supported on integer type vectors\n");
-                    return nullptr;
-                }
-#endif // defined(TARGET_XARCH) || defined(TARGET_ARM64)
-            }
-#endif // DEBUG
-
-            // op1 is the first operand; if instance method, op1 is "this" arg
-            // op2 is the second operand
             op2 = impSIMDPopStack(simdType);
             op1 = impSIMDPopStack(simdType, instMethod);
 
-#ifdef TARGET_XARCH
+#if defined(TARGET_XARCH)
             if (simdIntrinsicID == SIMDIntrinsicBitwiseAndNot)
             {
-                // XARCH implements SIMDIntrinsicBitwiseAndNot as ~op1 & op2, while the
-                // software implementation does op1 & ~op2, so we need to swap the operands
-
                 GenTree* tmp = op2;
                 op2          = op1;
                 op1          = tmp;
             }
+
+            NamedIntrinsic intrinsicId = lookupHWIntrinsicId(simdIntrinsicID, simdType, baseType);
+            simdTree = gtNewSimdHWIntrinsicNode(simdType, op1, op2, intrinsicId, baseType, size);
+#else
+            simdTree = gtNewSIMDNode(simdType, op1, op2, simdIntrinsicID, baseType, size);
 #endif // TARGET_XARCH
 
-            simdTree = gtNewSIMDNode(simdType, op1, op2, simdIntrinsicID, baseType, size);
-            retVal   = simdTree;
+            retVal = simdTree;
+            break;
         }
-        break;
 
         case SIMDIntrinsicSelect:
         {
