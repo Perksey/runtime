@@ -922,6 +922,7 @@ namespace System.Runtime.InteropServices
         IInspectable = 46,
         HString = 47,
         LPUTF8Str = 48,
+        TransparentStruct = 49,
     }
     [System.ComponentModel.EditorBrowsableAttribute(System.ComponentModel.EditorBrowsableState.Never)]
     public enum VarEnum

@@ -44,5 +44,6 @@ namespace System.Runtime.InteropServices
         IInspectable = 0x2e,
         HString = 0x2f,     // Windows Runtime HSTRING
         LPUTF8Str = 0x30,   // UTF8 string
+        TransparentStruct = 0x31,
     }
 }
