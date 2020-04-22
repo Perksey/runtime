@@ -3712,6 +3712,7 @@ static MarshalInfo::MarshalType DoMarshalReturnValue(MetaSig&           msig,
 #endif // FEATURE_COMINTEROP
         {
             if (marshalType == MarshalInfo::MARSHAL_TYPE_BLITTABLEVALUECLASS
+                    || marshalType == MarshalInfo::MARSHAL_TYPE_TRANSPARENTVALUECLASS
                     || marshalType == MarshalInfo::MARSHAL_TYPE_VALUECLASS
                     || marshalType == MarshalInfo::MARSHAL_TYPE_GUID
                     || marshalType == MarshalInfo::MARSHAL_TYPE_DECIMAL

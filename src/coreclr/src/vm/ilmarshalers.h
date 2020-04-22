@@ -371,6 +371,12 @@ protected:
         return (0 != (dwMarshalFlags & MARSHAL_FLAG_FIELD));
     }
 
+    static inline bool IsTransparentValueClass(DWORD dwMarshalFlags)
+    {
+        LIMITED_METHOD_CONTRACT;
+        return (0 != (dwMarshalFlags & MARSHAL_FLAG_TRANSPARENTVALUECLASS));
+    }
+
     static void EmitLoadNativeLocalAddrForByRefDispatch(ILCodeStream* pslILEmit, DWORD local)
     {
         WRAPPER_NO_CONTRACT;
@@ -752,7 +758,7 @@ public:
             // On Windows arm we need to respect HFAs and not use a return buffer if the return type is an HFA
             // for X86 Windows non-member functions we bash the return type from struct to U1, U2, U4 or U8
             // and use byrefNativeReturn for all other structs.
-            if (nativeMethodIsMemberFunction)
+            if (nativeMethodIsMemberFunction && !IsTransparentValueClass(dwMarshalFlags))
             {
 #ifdef TARGET_ARM
                 byrefNativeReturn = !nativeType.InternalToken.GetMethodTable()->IsNativeHFA();

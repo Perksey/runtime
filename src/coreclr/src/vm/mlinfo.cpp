@@ -727,7 +727,7 @@ void VerifyAndAdjustNormalizedType(
                 }
 
                 // verify the native type of the value type (must be default or Struct)
-                if (!(ntype == NATIVE_TYPE_DEFAULT || ntype == NATIVE_TYPE_STRUCT))
+                if (!(ntype == NATIVE_TYPE_DEFAULT || ntype == NATIVE_TYPE_STRUCT || ntype == NATIVE_TYPE_TRANSPARENTSTRUCT))
                 {
                     *pManagedElemType = sigElemType;
                     return;
@@ -2810,7 +2810,7 @@ MarshalInfo::MarshalInfo(Module* pModule,
 
                 if (m_pMT->IsBlittable())
                 {
-                    if (!(nativeType == NATIVE_TYPE_DEFAULT || nativeType == NATIVE_TYPE_STRUCT))
+                    if (!(nativeType == NATIVE_TYPE_DEFAULT || nativeType == NATIVE_TYPE_STRUCT || nativeType == NATIVE_TYPE_TRANSPARENTSTRUCT))
                     {
                         m_resID = IDS_EE_BADMARSHAL_VALUETYPE;
                         IfFailGoto(E_FAIL, lFail);
@@ -2866,7 +2866,7 @@ MarshalInfo::MarshalInfo(Module* pModule,
 #endif // TARGET_X86
                         {
                             m_args.m_pMT = m_pMT;
-                            m_type = MARSHAL_TYPE_BLITTABLEVALUECLASS;
+                            m_type = (nativeType != NATIVE_TYPE_TRANSPARENTSTRUCT) ? MARSHAL_TYPE_BLITTABLEVALUECLASS : MARSHAL_TYPE_TRANSPARENTVALUECLASS;
                         }
                     }
                 }
@@ -3301,7 +3301,7 @@ ILMarshaler* CreateILMarshaler(MarshalInfo::MarshalType mtype, NDirectStubLinker
 
 
 
-DWORD CalculateArgumentMarshalFlags(BOOL byref, BOOL in, BOOL out, BOOL fMngToNative)
+DWORD CalculateArgumentMarshalFlags(BOOL byref, BOOL in, BOOL out, BOOL fMngToNative, BOOL transparentValueClass = FALSE)
 {
     LIMITED_METHOD_CONTRACT;
     DWORD dwMarshalFlags = 0;
@@ -3326,10 +3326,15 @@ DWORD CalculateArgumentMarshalFlags(BOOL byref, BOOL in, BOOL out, BOOL fMngToNa
         dwMarshalFlags |= MARSHAL_FLAG_CLR_TO_NATIVE;
     }
 
+    if (transparentValueClass)
+    {
+        dwMarshalFlags |= MARSHAL_FLAG_TRANSPARENTVALUECLASS;
+    }
+
     return dwMarshalFlags;
 }
 
-DWORD CalculateReturnMarshalFlags(BOOL hrSwap, BOOL fMngToNative, BOOL onInstanceMethod)
+DWORD CalculateReturnMarshalFlags(BOOL hrSwap, BOOL fMngToNative, BOOL onInstanceMethod, BOOL transparentValueClass)
 {
     LIMITED_METHOD_CONTRACT;
     DWORD dwMarshalFlags = MARSHAL_FLAG_RETVAL;
@@ -3347,6 +3352,11 @@ DWORD CalculateReturnMarshalFlags(BOOL hrSwap, BOOL fMngToNative, BOOL onInstanc
     if (onInstanceMethod)
     {
         dwMarshalFlags |= MARSHAL_FLAG_IN_MEMBER_FUNCTION;
+    }
+
+    if (transparentValueClass)
+    {
+        dwMarshalFlags |= MARSHAL_FLAG_TRANSPARENTVALUECLASS;
     }
 
     return dwMarshalFlags;
@@ -3400,7 +3410,7 @@ void MarshalInfo::GenerateArgumentIL(NDirectStubLinker* psl,
     CONSISTENCY_CHECK(amostat == HANDLEASNORMAL);
 
     NewHolder<ILMarshaler> pMarshaler = CreateILMarshaler(m_type, psl);
-    DWORD dwMarshalFlags = CalculateArgumentMarshalFlags(m_byref, m_in, m_out, fMngToNative);
+    DWORD dwMarshalFlags = CalculateArgumentMarshalFlags(m_byref, m_in, m_out, fMngToNative, m_type == MARSHAL_TYPE_TRANSPARENTVALUECLASS);
 
     if (!pMarshaler->SupportsArgumentMarshal(dwMarshalFlags, &resID))
     {
@@ -3492,7 +3502,7 @@ void MarshalInfo::GenerateReturnIL(NDirectStubLinker* psl,
         }
 
         NewHolder<ILMarshaler> pMarshaler = CreateILMarshaler(m_type, psl);
-        DWORD dwMarshalFlags = CalculateReturnMarshalFlags(retval, fMngToNative, m_onInstanceMethod);
+        DWORD dwMarshalFlags = CalculateReturnMarshalFlags(retval, fMngToNative, m_onInstanceMethod, m_type == MARSHAL_TYPE_TRANSPARENTVALUECLASS);
 
         if (!pMarshaler->SupportsReturnMarshal(dwMarshalFlags, &resID))
         {
@@ -3616,6 +3626,7 @@ UINT16 MarshalInfo::GetNativeSize(MarshalType mtype)
         switch (mtype)
         {
             case MARSHAL_TYPE_BLITTABLEVALUECLASS:
+            case MARSHAL_TYPE_TRANSPARENTVALUECLASS:
             case MARSHAL_TYPE_VALUECLASS:
             case MARSHAL_TYPE_BLITTABLEVALUECLASSWITHCOPYCTOR:
                 return (UINT16) m_pMT->GetNativeSize();
@@ -4268,6 +4279,7 @@ DispParamMarshaler *MarshalInfo::GenerateDispParamMarshaler()
 
         case MARSHAL_TYPE_VALUECLASS:
         case MARSHAL_TYPE_BLITTABLEVALUECLASS:
+        case MARSHAL_TYPE_TRANSPARENTVALUECLASS:
         case MARSHAL_TYPE_BLITTABLEPTR:
         case MARSHAL_TYPE_LAYOUTCLASSPTR:
         case MARSHAL_TYPE_BLITTABLEVALUECLASSWITHCOPYCTOR:
@@ -4564,6 +4576,9 @@ VOID MarshalInfo::MarshalTypeToString(SString& strMarshalType, BOOL fSizeIsSpeci
                 break;
             case MARSHAL_TYPE_BLITTABLEVALUECLASS:
                 strRetVal = W("blittable value class");
+                break;
+            case MARSHAL_TYPE_TRANSPARENTVALUECLASS:
+                strRetVal = W("transparent value class");
                 break;
             case MARSHAL_TYPE_VALUECLASS:
                 strRetVal = W("value class");

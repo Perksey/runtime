@@ -84,6 +84,7 @@ DEFINE_MARSHALER_TYPE(MARSHAL_TYPE_LAYOUTCLASSPTR,  LayoutClassPtrMarshaler,    
 DEFINE_MARSHALER_TYPE(MARSHAL_TYPE_ARRAYWITHOFFSET, ArrayWithOffsetMarshaler,            false)
 
 DEFINE_MARSHALER_TYPE(MARSHAL_TYPE_BLITTABLEVALUECLASS,             BlittableValueClassMarshaler,  true)
+DEFINE_MARSHALER_TYPE(MARSHAL_TYPE_TRANSPARENTVALUECLASS,           BlittableValueClassMarshaler,  true)
 DEFINE_MARSHALER_TYPE(MARSHAL_TYPE_VALUECLASS,                      ValueClassMarshaler,           true)
 
 DEFINE_MARSHALER_TYPE(MARSHAL_TYPE_REFERENCECUSTOMMARSHALER,        ReferenceCustomMarshaler,      false)

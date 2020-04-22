@@ -175,6 +175,7 @@ VOID ParseNativeType(Module*                     pModule,
             *pNFD = NativeFieldDescriptor(pFD, NativeFieldCategory::INTEGER, sizeof(void*), sizeof(void*));
             break;
         case MarshalInfo::MARSHAL_TYPE_BLITTABLEVALUECLASS:
+        case MarshalInfo::MARSHAL_TYPE_TRANSPARENTVALUECLASS:
         case MarshalInfo::MARSHAL_TYPE_VALUECLASS:
         case MarshalInfo::MARSHAL_TYPE_LAYOUTCLASS:
         case MarshalInfo::MARSHAL_TYPE_BLITTABLE_LAYOUTCLASS:
@@ -295,7 +296,7 @@ bool IsFieldBlittable(
             isBlittable = flags != ParseNativeTypeFlags::IsWinRT && (nativeType == NATIVE_TYPE_DEFAULT || nativeType == NATIVE_TYPE_FUNC);
             break;
         case ELEMENT_TYPE_VALUETYPE:
-            if (nativeType != NATIVE_TYPE_DEFAULT && nativeType != NATIVE_TYPE_STRUCT)
+            if (nativeType != NATIVE_TYPE_DEFAULT && nativeType != NATIVE_TYPE_STRUCT && nativeType != NATIVE_TYPE_TRANSPARENTSTRUCT)
             {
                 isBlittable = false;
             }

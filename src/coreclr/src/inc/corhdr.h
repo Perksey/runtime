@@ -1087,6 +1087,7 @@ typedef enum CorNativeType
     NATIVE_TYPE_IINSPECTABLE = 0x2e,
     NATIVE_TYPE_HSTRING     = 0x2f,
     NATIVE_TYPE_LPUTF8STR   = 0x30, // utf-8 string
+    NATIVE_TYPE_TRANSPARENTSTRUCT = 0x31,
     NATIVE_TYPE_MAX         = 0x50, // first invalid element type
 } CorNativeType;
 
