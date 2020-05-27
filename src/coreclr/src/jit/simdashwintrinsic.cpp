@@ -169,10 +169,8 @@ GenTree* Compiler::impSimdAsHWIntrinsic(NamedIntrinsic        intrinsic,
                                         CORINFO_CLASS_HANDLE  clsHnd,
                                         CORINFO_METHOD_HANDLE method,
                                         CORINFO_SIG_INFO*     sig,
-                                        bool                  mustExpand)
+                                        GenTree*              newobjThis)
 {
-    assert(!mustExpand);
-
     if (!featureSIMD)
     {
         // We can't support SIMD intrinsics if the JIT doesn't support the feature
@@ -267,7 +265,7 @@ GenTree* Compiler::impSimdAsHWIntrinsic(NamedIntrinsic        intrinsic,
     if (hwIntrinsic == intrinsic)
     {
         // The SIMD intrinsic requires special handling outside the normal code path
-        return impSimdAsHWIntrinsicSpecial(intrinsic, clsHnd, sig, retType, baseType, simdSize);
+        return impSimdAsHWIntrinsicSpecial(intrinsic, clsHnd, sig, retType, baseType, simdSize, newobjThis);
     }
 
     CORINFO_InstructionSet hwIntrinsicIsa = HWIntrinsicInfo::lookupIsa(hwIntrinsic);
@@ -430,7 +428,7 @@ GenTree* Compiler::impSimdAsHWIntrinsicSpecial(NamedIntrinsic       intrinsic,
                         case TYP_LONG:
                         case TYP_ULONG:
                         {
-                            op1 = gtNewLconNode(1, TYP_LONG);
+                            op1 = gtNewLconNode(1);
                             break;
                         }
 
@@ -447,7 +445,7 @@ GenTree* Compiler::impSimdAsHWIntrinsicSpecial(NamedIntrinsic       intrinsic,
                         }
                     }
 
-                    return gtNewSimdCreateBroadcastNode(retType, op1, baseType, simdSize);
+                    return gtNewSimdCreateBroadcastNode(retType, op1, baseType, simdSize, /* isSimdAsHWIntrinsic */ true);
                 }
 
                 case NI_VectorT128_get_Count:
@@ -479,7 +477,7 @@ GenTree* Compiler::impSimdAsHWIntrinsicSpecial(NamedIntrinsic       intrinsic,
                         case TYP_LONG:
                         case TYP_ULONG:
                         {
-                            op1 = gtNewLconNode(1, TYP_LONG);
+                            op1 = gtNewLconNode(1);
                             break;
                         }
 
@@ -496,7 +494,7 @@ GenTree* Compiler::impSimdAsHWIntrinsicSpecial(NamedIntrinsic       intrinsic,
                         }
                     }
 
-                    return gtNewSimdCreateBroadcastNode(retType, op1, baseType, simdSize);
+                    return gtNewSimdCreateBroadcastNode(retType, op1, baseType, simdSize, /* isSimdAsHWIntrinsic */ true);
                 }
 
                 case NI_VectorT128_get_Count:
