@@ -18,6 +18,7 @@
 #include <mono/utils/mono-compiler.h>
 #include <mono/utils/mono-threads-coop.h>
 #include <mono/utils/unlocked.h>
+#include <metadata/reflection-internals.h>
 
 #include "mini.h"
 #include "lldb.h"
@@ -45,6 +46,8 @@ static gint32 rgctx_num_lazy_fetch_trampolines;
 #define mono_trampolines_lock() mono_os_mutex_lock (&trampolines_mutex)
 #define mono_trampolines_unlock() mono_os_mutex_unlock (&trampolines_mutex)
 static mono_mutex_t trampolines_mutex;
+
+static MonoMethod *get_interface_implementation_idic_helper;
 
 #ifdef MONO_ARCH_GSHARED_SUPPORTED
 
@@ -749,6 +752,135 @@ common_call_trampoline (host_mgreg_t *regs, guint8 *code, MonoMethod *m, MonoVTa
 	return addr;
 }
 
+static gpointer
+resolve_vtable_slot (MonoVTable *vt, int slot, gpointer **resolved_vtable_slot, MonoMethod **m, MonoError *error)
+{
+	gpointer res = NULL;
+
+	gpointer *vtable_slot = NULL;
+	gpointer addr = NULL;
+
+	if (slot >= 0) {
+		/* Normal virtual call */
+		vtable_slot = &(vt->vtable [slot]);
+
+		/* Avoid loading metadata or creating a generic vtable if possible */
+		addr = mono_aot_get_method_from_vt_slot (vt, slot, error);
+		goto_if_nok (error, leave);
+		if (addr && !m_class_is_valuetype (vt->klass)) {
+			*vtable_slot = addr;
+			res = mono_create_ftnptr (addr);
+			goto leave;
+		}
+
+		/*
+		 * Bug #616463 (see
+		 * is_generic_method_definition() above) also
+		 * goes away if we do a
+		 * mono_class_setup_vtable (vt->klass) here,
+		 * because we then inflate the method
+		 * correctly, put it in the cache, and the
+		 * "wrong" inflation invocation still looks up
+		 * the correctly inflated method.
+		 *
+		 * The hack above seems more stable and
+		 * trustworthy.
+		 */
+		*m = mono_class_get_vtable_entry (vt->klass, slot);
+	} else {
+		/* IMT call */
+		vtable_slot = &(((gpointer*)vt) [slot]);
+
+		*m = NULL;
+	}
+
+leave:
+	*resolved_vtable_slot = vtable_slot;
+	return res;
+}
+
+static gpointer
+resolve_idic_vtable_slot (host_mgreg_t *regs, guint8 *code, int slot, MonoObject *this_arg, MonoVTable *vt, MonoError *error)
+{
+	gpointer res = NULL;
+
+	g_assert (m_class_is_dynamic_interface_castable(vt->klass));
+
+	MonoMethod *method = mono_arch_find_imt_method (regs, code);
+	g_assert (method != NULL);
+
+	//Validate that underlying class doesn't implement method, if so it should be resolved the normal way.
+	if (mono_class_is_interface (method->klass) && mono_class_interface_offset (vt->klass, method->klass) == -1) {
+		MonoReflectionTypeHandle ref_type = mono_type_get_object_handle (m_class_get_byval_arg(method->klass), error);
+		if (!is_ok (error))
+			return NULL;
+
+		if (!get_interface_implementation_idic_helper) {
+			mono_loader_lock ();
+			if (!get_interface_implementation_idic_helper) {
+				get_interface_implementation_idic_helper = mono_class_get_method_from_name_checked(mono_defaults.dynamicinterfacecastablehelpers_class, "GetInterfaceImplementation", 2, 0, error);
+			}
+			mono_loader_unlock ();
+		}
+
+		if (!get_interface_implementation_idic_helper || !is_ok(error))
+			return NULL;
+
+		MonoObject *cast_exception = NULL;
+		void *args[2];
+		args[0] = this_arg;
+		args[1] = MONO_HANDLE_RAW (ref_type);
+
+		MonoReflectionType *cast_ref_type = (MonoReflectionType *)mono_runtime_invoke_checked (get_interface_implementation_idic_helper, NULL, args, error);
+		if (!is_ok (error))
+			return NULL;
+
+		if (cast_ref_type == NULL) {
+			mono_error_set_exception_instance (error, mono_exception_from_name (mono_defaults.corlib, "System", "EntryPointNotFoundException"));
+			return NULL;
+		}
+
+		if (cast_ref_type->type->type != MONO_TYPE_CLASS)
+			return NULL;
+
+		MonoClass *impl_type = cast_ref_type->type->data.klass;
+		if (impl_type != NULL) {
+			MonoVTable *impl_type_vt = mono_class_vtable_checked (impl_type, error);
+			if (!is_ok(error)) {
+				return NULL;
+			}
+
+			int impl_type_vtable_slot_index = 0;
+			gpointer *impl_type_vtable_slot = NULL;
+			MonoMethod *impl_type_m = NULL;
+
+			// Slot is incorrect for implementors vtable since it is implemented in different type.
+			if (method->slot >= 0) {
+				// Vtable slot.
+				gboolean no_exact_match;
+				int offset = mono_class_interface_offset_with_variance (impl_type, method->klass, &no_exact_match);
+				impl_type_vtable_slot_index = offset + method->slot;
+				g_assert (impl_type_vtable_slot_index >= 0);
+			} else {
+				// IMT slot.
+				impl_type_vtable_slot_index = method->slot;
+			}
+
+			// Get implementing method and vtable slot in implementing type.
+			res = resolve_vtable_slot (impl_type_vt, impl_type_vtable_slot_index, &impl_type_vtable_slot, &impl_type_m, error);
+			if (res == NULL)
+				res = common_call_trampoline (regs, code, impl_type_m, impl_type_vt, impl_type_vtable_slot, error);
+
+			if (res == NULL) {
+				mono_error_set_exception_instance (error, mono_exception_from_name (mono_defaults.corlib, "System", "EntryPointNotFoundException"));
+				return NULL;
+			}
+		}
+	}
+
+	return res;
+}
+
 /**
  * mono_magic_trampoline:
  *
@@ -813,39 +945,15 @@ mono_vcall_trampoline (host_mgreg_t *regs, guint8 *code, int slot, guint8 *tramp
 
 	vt = this_arg->vtable;
 
-	if (slot >= 0) {
-		/* Normal virtual call */
-		vtable_slot = &(vt->vtable [slot]);
-
-		/* Avoid loading metadata or creating a generic vtable if possible */
-		addr = mono_aot_get_method_from_vt_slot (vt, slot, error);
-		goto_if_nok (error, leave);
-		if (addr && !m_class_is_valuetype (vt->klass)) {
-			*vtable_slot = addr;
-			res = mono_create_ftnptr (addr);
+	if (slot < 0 && m_class_is_dynamic_interface_castable(vt->klass)) {
+		res = resolve_idic_vtable_slot(regs, code, slot, this_arg, vt, error);
+		if (res != NULL || (res == NULL && !is_ok (error)))
 			goto leave;
-		}
-
-		/*
-		 * Bug #616463 (see
-		 * is_generic_method_definition() above) also
-		 * goes away if we do a
-		 * mono_class_setup_vtable (vt->klass) here,
-		 * because we then inflate the method
-		 * correctly, put it in the cache, and the
-		 * "wrong" inflation invocation still looks up
-		 * the correctly inflated method.
-		 *
-		 * The hack above seems more stable and
-		 * trustworthy.
-		 */
-		m = mono_class_get_vtable_entry (vt->klass, slot);
-	} else {
-		/* IMT call */
-		vtable_slot = &(((gpointer*)vt) [slot]);
-
-		m = NULL;
 	}
+
+	res = resolve_vtable_slot (vt, slot, &vtable_slot, &m, error);
+	if (res != NULL)
+		goto leave;
 
 	res = common_call_trampoline (regs, code, m, vt, vtable_slot, error);
 leave:

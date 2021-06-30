@@ -3901,7 +3901,7 @@ mono_class_signature_is_assignable_from (MonoClass *klass, MonoClass *oklass, gb
 void
 mono_class_is_assignable_from_general (MonoClass *klass, MonoClass *oklass, gboolean signature_assignment, gboolean *result, MonoError *error)
 {
-	g_assert (result);
+    g_assert (result);
 	if (klass == oklass) {
 		*result = TRUE;
 		return;

@@ -1637,7 +1637,7 @@ leave:
 
 
 MonoReflectionTypeHandle
-ves_icall_System_Type_internal_from_handle (MonoType *handle, MonoError *error)
+ves_icall_System_RuntimeTypeHandle_internal_from_handle (MonoType *handle, MonoError *error)
 {
 	return mono_type_get_object_handle (handle, error);
 }

@@ -607,6 +607,18 @@ mono_class_create_from_typedef (MonoImage *image, guint32 type_token, MonoError 
 		klass->interfaces = interfaces;
 		klass->interface_count = icount;
 		klass->interfaces_inited = 1;
+
+		if (!klass->valuetype) {
+            int i;
+            for (i = 0; i < icount; i++) {
+                if (mono_is_corlib_image(interfaces[i]->image) &&
+                    !strcmp(interfaces[i]->name_space, "System.Runtime.InteropServices") &&
+                    !strcmp(interfaces[i]->name, "IDynamicInterfaceCastable")) {
+                    klass->is_dynamic_interface_castable = 1;
+                    break;
+                }
+            }
+		}
 	}
 
 	/*g_print ("Load class %s\n", name);*/
@@ -680,8 +692,8 @@ mono_class_create_from_typedef (MonoImage *image, guint32 type_token, MonoError 
 	// compute is_byreflike
 	if (m_class_is_valuetype (klass))
 		if (class_has_isbyreflike_attribute (klass))
-			klass->is_byreflike = 1; 
-		
+			klass->is_byreflike = 1;
+
 	mono_loader_unlock ();
 
 	MONO_PROFILER_RAISE (class_loaded, (klass));

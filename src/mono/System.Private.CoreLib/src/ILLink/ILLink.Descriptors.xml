@@ -648,5 +648,7 @@
 			<!-- https://github.com/dotnet/runtime/issues/47909 -->
 			<method signature="System.Void .ctor()" />
 		</type>
+
+    <type fullname="System.Runtime.InteropServices.DynamicInterfaceCastableHelpers" required="true" />
 	</assembly>
 </linker>

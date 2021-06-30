@@ -507,7 +507,7 @@ HANDLES(THREAD_13, "StartInternal", ves_icall_System_Threading_Thread_StartInter
 NOHANDLES(ICALL(THREAD_14, "YieldInternal", ves_icall_System_Threading_Thread_YieldInternal))
 
 ICALL_TYPE(TYPE, "System.Type", TYPE_1)
-HANDLES(TYPE_1, "internal_from_handle", ves_icall_System_Type_internal_from_handle, MonoReflectionType, 1, (MonoType_ref))
+HANDLES(TYPE_1, "internal_from_handle", ves_icall_System_RuntimeTypeHandle_internal_from_handle, MonoReflectionType, 1, (MonoType_ref))
 
 ICALL_TYPE(TYPEDR, "System.TypedReference", TYPEDR_1)
 HANDLES(TYPEDR_1, "InternalMakeTypedReference", ves_icall_System_TypedReference_InternalMakeTypedReference, void, 4, (MonoTypedRef_ptr, MonoObject, MonoArray, MonoReflectionType))

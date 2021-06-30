@@ -319,5 +319,16 @@ namespace System
             length = outHandles.Length;
             return outHandles;
         }
+
+        internal RuntimeType GetRuntimeType()
+        {
+            if (Value == IntPtr.Zero)
+                return null!; // FIXME: shouldn't return null
+
+            return internal_from_handle(Value);
+        }
+
+        [MethodImplAttribute(MethodImplOptions.InternalCall)]
+        private static extern RuntimeType internal_from_handle(IntPtr handle);
     }
 }

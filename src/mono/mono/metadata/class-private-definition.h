@@ -81,6 +81,9 @@ struct _MonoClass {
 	guint has_weak_fields : 1; /* class has weak reference fields */
 	guint has_dim_conflicts : 1; /* Class has conflicting default interface methods */
 
+	/* next byte */
+	guint is_dynamic_interface_castable : 1; /* Class implements IDynamicInterfaceCastable */
+
 	MonoClass  *parent;
 	MonoClass  *nested_in;
 

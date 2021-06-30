@@ -980,6 +980,8 @@ typedef struct {
 	MonoClass *generic_ienumerator_class;
 	MonoClass *alc_class;
 	MonoClass *appcontext_class;
+	MonoClass *idynamicinterfacecastable_class;
+	MonoClass *dynamicinterfacecastablehelpers_class;
 } MonoDefaults;
 
 #define GENERATE_GET_CLASS_WITH_CACHE_DECL(shortname) \

@@ -89,13 +89,7 @@ namespace System
             return TypeNameParser.GetType(typeName, assemblyResolver, typeResolver, throwOnError, ignoreCase, ref stackMark);
         }
 
-        public static Type GetTypeFromHandle(RuntimeTypeHandle handle)
-        {
-            if (handle.Value == IntPtr.Zero)
-                return null!; // FIXME: shouldn't return null
-
-            return internal_from_handle(handle.Value);
-        }
+        public static Type GetTypeFromHandle(RuntimeTypeHandle handle) => handle.GetRuntimeType();
 
         internal virtual Type InternalResolve()
         {

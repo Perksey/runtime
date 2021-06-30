@@ -416,6 +416,12 @@ mono_init_internal (const char *filename, const char *exe_filename, const char *
 	mono_defaults.alc_class = mono_class_get_assembly_load_context_class ();
 	mono_defaults.appcontext_class = mono_class_try_load_from_name (mono_defaults.corlib, "System", "AppContext");
 
+	mono_defaults.idynamicinterfacecastable_class = mono_class_load_from_name (
+	        mono_defaults.corlib, "System.Runtime.InteropServices", "IDynamicInterfaceCastable");
+
+    mono_defaults.dynamicinterfacecastablehelpers_class = mono_class_load_from_name (
+            mono_defaults.corlib, "System.Runtime.InteropServices", "DynamicInterfaceCastableHelpers");
+
 	domain->friendly_name = g_path_get_basename (filename);
 
 	MONO_PROFILER_RAISE (domain_name, (domain, domain->friendly_name));

@@ -104,6 +104,8 @@ static MonoCoopMutex ldstr_section;
 static MonoMethod *create_proxy_for_type_method;
 static MonoGHashTable *ldstr_table;
 
+static MonoMethod *is_interface_implemented_idic_helper;
+
 static GString *
 quote_escape_and_append_string (char *src_str, GString *target_str);
 
@@ -6641,6 +6643,49 @@ mono_object_handle_isinst_mbyref_raw (MonoObjectHandle obj, MonoClass *klass, Mo
 		else if (mono_class_has_variant_generic_params (klass) && mono_class_is_assignable_from_internal (klass, mono_handle_class (obj))) {
 			result = TRUE;
 			goto leave;
+		}
+
+		/* if it's an IDynamicInterfaceCastable, the object decides whether it implements an interface */
+		else if (m_class_is_dynamic_interface_castable(MONO_HANDLE_GETVAL(obj, vtable)->klass)) {
+			if (!is_interface_implemented_idic_helper) {
+				mono_loader_lock();
+				if (!is_interface_implemented_idic_helper) {
+					is_interface_implemented_idic_helper = mono_class_get_method_from_name_checked(
+						mono_defaults.dynamicinterfacecastablehelpers_class, "IsInterfaceImplemented", 3, 0, error);
+				}
+				mono_loader_unlock();
+			}
+
+		    // IDIC only casts to interfaces.
+		    if (!is_interface_implemented_idic_helper || !mono_class_is_interface (klass)) {
+		        result = FALSE;
+		        goto leave;
+            }
+
+            MonoObject *obj_instance = MONO_HANDLE_RAW (obj);
+            MonoDomain *domain = obj_instance->vtable->domain;
+
+            // Get interface type handle passed to the helper.
+            MonoReflectionTypeHandle ref_type = mono_type_get_object_handle (m_class_get_byval_arg(klass), error);
+            if (!is_ok (error))
+                return FALSE;
+
+            MonoException *cast_exception = NULL;
+            gpointer args[3];
+            args[0] = obj_instance;
+            args[1] = MONO_HANDLE_RAW (ref_type);
+            args[2] = &cast_exception;
+
+            // check for support of requested interface type.
+            MonoObject *isinst_res_obj = mono_runtime_invoke_checked (is_interface_implemented_idic_helper, NULL, args, error);
+            gboolean isinst_of = (isinst_res_obj != NULL) ? *((MonoBoolean*)mono_object_unbox_internal (isinst_res_obj)) : FALSE;
+            if (!is_ok (error) || !isinst_of) {
+                if (cast_exception != NULL)
+                    mono_error_set_exception_instance (error, cast_exception);
+                return FALSE;
+            }
+
+            return TRUE;
 		}
 	} else {
 		MonoClass *oklass = vt->klass;
